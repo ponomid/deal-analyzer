@@ -1,4 +1,4 @@
-function buildStaticMapUrl(lat: number, lon: number, apiKey: string): string {
+export function googleStaticMapUrl(lat: number, lon: number, apiKey: string): string {
   const params = new URLSearchParams({
     center: `${lat},${lon}`,
     zoom: "18",
@@ -11,11 +11,19 @@ function buildStaticMapUrl(lat: number, lon: number, apiKey: string): string {
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
 }
 
-export function mapImageSrc(lat: number, lon: number): string {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (apiKey) {
-    return buildStaticMapUrl(lat, lon, apiKey);
-  }
+/** Free fallback when Google Maps is unavailable or misconfigured. */
+export function osmEmbedMapUrl(lat: number, lon: number): string {
+  const delta = 0.006;
+  const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
+  const params = new URLSearchParams({
+    bbox,
+    layer: "mapnik",
+    marker: `${lat},${lon}`,
+  });
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+}
+
+export function mapImageProxyUrl(lat: number, lon: number): string {
   return `/api/map-image?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`;
 }
 

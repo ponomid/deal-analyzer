@@ -62,6 +62,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Failed to load map image" }, { status: 502 });
     }
 
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("image")) {
+      return NextResponse.json({ error: "Map provider returned non-image response" }, { status: 502 });
+    }
+
     const bytes = await response.arrayBuffer();
     return new NextResponse(bytes, {
       headers: {

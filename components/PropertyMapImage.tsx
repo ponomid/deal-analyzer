@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { mapImageSrc } from "@/lib/maps";
+import { useEffect, useState } from "react";
+import { googleStaticMapUrl, mapImageProxyUrl, osmEmbedMapUrl } from "@/lib/maps";
 
 type PropertyMapImageProps = {
   lat?: number | null;
@@ -10,35 +10,89 @@ type PropertyMapImageProps = {
   className?: string;
 };
 
-export function PropertyMapImage({ lat, lon, alt = "Property map preview", className }: PropertyMapImageProps) {
-  const [failed, setFailed] = useState(false);
-  const [useApiFallback, setUseApiFallback] = useState(false);
+type MapSource = "loading" | "google-static" | "api-proxy" | "osm";
 
-  if (lat == null || lon == null || failed) {
+export function PropertyMapImage({ lat, lon, alt = "Property map preview", className }: PropertyMapImageProps) {
+  const [googleKey, setGoogleKey] = useState<string | null>(null);
+  const [source, setSource] = useState<MapSource>("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/maps-config")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { googleMapsKey?: string } | null) => {
+        if (cancelled) return;
+        const key = data?.googleMapsKey?.trim() || null;
+        setGoogleKey(key);
+        setSource(key ? "google-static" : "osm");
+      })
+      .catch(() => {
+        if (!cancelled) setSource("osm");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const classNames = [className].filter(Boolean).join(" ");
+
+  if (lat == null || lon == null) {
     return (
-      <div className={["property-map-placeholder", className].filter(Boolean).join(" ")}>
+      <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
         Map preview unavailable
       </div>
     );
   }
 
-  const src = useApiFallback
-    ? `/api/map-image?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`
-    : mapImageSrc(lat, lon);
+  if (source === "loading") {
+    return (
+      <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
+        Loading map…
+      </div>
+    );
+  }
+
+  if (source === "osm") {
+    return (
+      <iframe
+        title={alt}
+        src={osmEmbedMapUrl(lat, lon)}
+        className={["property-map-embed", classNames].filter(Boolean).join(" ")}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    );
+  }
+
+  if (source === "api-proxy") {
+    return (
+      <img
+        src={mapImageProxyUrl(lat, lon)}
+        alt={alt}
+        className={["property-map-image", classNames].filter(Boolean).join(" ")}
+        loading="lazy"
+        onError={() => setSource("osm")}
+      />
+    );
+  }
+
+  if (source === "google-static" && googleKey) {
+    return (
+      <img
+        src={googleStaticMapUrl(lat, lon, googleKey)}
+        alt={alt}
+        className={["property-map-image", classNames].filter(Boolean).join(" ")}
+        loading="lazy"
+        onError={() => setSource("api-proxy")}
+      />
+    );
+  }
 
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={["property-map-image", className].filter(Boolean).join(" ")}
-      onError={() => {
-        if (!useApiFallback && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
-          setUseApiFallback(true);
-          return;
-        }
-        setFailed(true);
-      }}
-      loading="lazy"
-    />
+    <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
+      Map preview unavailable
+    </div>
   );
 }
