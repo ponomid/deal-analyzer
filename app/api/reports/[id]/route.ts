@@ -10,6 +10,10 @@ export async function DELETE(
   const { id } = await params;
   const reports = await readReportsFromDisk();
   const next = reports.filter((r) => r.id !== id);
-  await writeReportsToDisk(next);
+  try {
+    await writeReportsToDisk(next);
+  } catch {
+    return NextResponse.json({ error: "Report storage unavailable" }, { status: 503 });
+  }
   return NextResponse.json({ reports: next });
 }

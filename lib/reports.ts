@@ -132,32 +132,56 @@ export async function fetchSavedReports(): Promise<SavedReport[]> {
   }
 }
 
-export async function saveReportToServer(report: SavedReport): Promise<SavedReport[]> {
-  const response = await fetch("/api/reports", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(report),
-  });
+function upsertLocalReport(report: SavedReport): SavedReport[] {
+  const reports = loadLocalReports();
+  const index = reports.findIndex((r) => r.id === report.id);
+  const next = [...reports];
+  if (index >= 0) next[index] = report;
+  else next.unshift(report);
+  saveLocalReports(next);
+  return next;
+}
 
-  if (!response.ok) {
-    throw new Error("Failed to save report");
+function deleteLocalReport(id: string): SavedReport[] {
+  const next = loadLocalReports().filter((r) => r.id !== id);
+  saveLocalReports(next);
+  return next;
+}
+
+export async function saveReportToServer(report: SavedReport): Promise<SavedReport[]> {
+  try {
+    const response = await fetch("/api/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report),
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as { reports: SavedReport[] };
+      saveLocalReports(payload.reports);
+      return payload.reports;
+    }
+  } catch {
+    // Server unavailable (e.g. Vercel) — fall back to browser storage.
   }
 
-  const payload = (await response.json()) as { reports: SavedReport[] };
-  saveLocalReports(payload.reports);
-  return payload.reports;
+  return upsertLocalReport(report);
 }
 
 export async function deleteReportFromServer(id: string): Promise<SavedReport[]> {
-  const response = await fetch(`/api/reports/${id}`, { method: "DELETE" });
+  try {
+    const response = await fetch(`/api/reports/${id}`, { method: "DELETE" });
 
-  if (!response.ok) {
-    throw new Error("Failed to delete report");
+    if (response.ok) {
+      const payload = (await response.json()) as { reports: SavedReport[] };
+      saveLocalReports(payload.reports);
+      return payload.reports;
+    }
+  } catch {
+    // Server unavailable — fall back to browser storage.
   }
 
-  const payload = (await response.json()) as { reports: SavedReport[] };
-  saveLocalReports(payload.reports);
-  return payload.reports;
+  return deleteLocalReport(id);
 }
 
 export function defaultReportName(address: string, price: string): string {

@@ -27,6 +27,10 @@ export async function POST(request: Request) {
   if (index >= 0) next[index] = report;
   else next.unshift(report);
 
-  await writeReportsToDisk(next);
+  try {
+    await writeReportsToDisk(next);
+  } catch {
+    return NextResponse.json({ error: "Report storage unavailable" }, { status: 503 });
+  }
   return NextResponse.json({ reports: next });
 }
