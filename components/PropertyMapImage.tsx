@@ -12,6 +12,7 @@ type PropertyMapImageProps = {
 
 export function PropertyMapImage({ lat, lon, alt = "Property map preview", className }: PropertyMapImageProps) {
   const [failed, setFailed] = useState(false);
+  const [useApiFallback, setUseApiFallback] = useState(false);
 
   if (lat == null || lon == null || failed) {
     return (
@@ -21,12 +22,22 @@ export function PropertyMapImage({ lat, lon, alt = "Property map preview", class
     );
   }
 
+  const src = useApiFallback
+    ? `/api/map-image?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`
+    : mapImageSrc(lat, lon);
+
   return (
     <img
-      src={mapImageSrc(lat, lon)}
+      src={src}
       alt={alt}
       className={["property-map-image", className].filter(Boolean).join(" ")}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (!useApiFallback && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+          setUseApiFallback(true);
+          return;
+        }
+        setFailed(true);
+      }}
       loading="lazy"
     />
   );
