@@ -60,6 +60,7 @@ Layout: ${beds || "?"} bed / ${baths || "?"} bath, ${sqft || "?"} sqft (approx).
 
 Instructions:
 - Search for at least 3 comparable active or recent long-term rental listings within a reasonable distance of this address, matching bed/bath count and similar size where possible.
+- Use at most 2 web searches total. Prefer one focused search for rentals near this address.
 - Base your estimate on real data found via search, not assumptions.
 - After searching, respond with ONLY a raw JSON object and nothing else - no markdown fences, no commentary, no citation formatting. Match exactly this shape:
 {"estimated_rent": <number>, "rent_low": <number>, "rent_high": <number>, "comps": [{"address": "<string>", "rent": <number>, "beds": <number>, "baths": <number>, "sqft": <number>, "source": "<string like Zillow, Apartments.com, Rent.com, Craigslist>"}], "notes": "<1-2 sentence explanation of your estimate>"}
@@ -159,9 +160,10 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 2500,
+      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      // Cap searches — each is ~$0.01 plus large token costs for result pages
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
     }),
   });
 
