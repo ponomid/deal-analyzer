@@ -85,7 +85,7 @@ export function buildFallbackAreaStats(
     school_summary: `State average ~${profile.schoolRating.toFixed(1)}/10 for ${location}`,
     walk_score: null,
     median_income: profile.medianIncome,
-    notes: `Estimated from ${abbr || "US"} statewide averages for ${location}. Run with API credits for ZIP-level web data.`,
+    notes: `Estimated from ${abbr || "US"} statewide averages for ${location}. ZIP-level live lookup is disabled to keep costs low.`,
     source: "fallback",
   };
 }

@@ -2,7 +2,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { AreaStats } from "@/lib/area-stats";
 
-const CACHE_FILE = path.join(process.cwd(), "data", "area-stats-cache.json");
+function getCacheFile(): string {
+  const dataDir = process.env.VERCEL
+    ? path.join("/tmp", "deal-analyzer")
+    : path.join(process.cwd(), "data");
+  return path.join(dataDir, "area-stats-cache.json");
+}
 
 type CacheEntry = {
   stats: AreaStats;
@@ -21,7 +26,7 @@ export async function readAreaStatsCache(
   city?: string
 ): Promise<AreaStats | null> {
   try {
-    const raw = await fs.readFile(CACHE_FILE, "utf8");
+    const raw = await fs.readFile(getCacheFile(), "utf8");
     const cache = JSON.parse(raw) as CacheFile;
     const entry = cache[cacheKey(zip, state, city)];
     if (!entry) return null;
@@ -39,15 +44,20 @@ export async function writeAreaStatsCache(
   city: string | undefined,
   stats: AreaStats
 ): Promise<void> {
-  let cache: CacheFile = {};
   try {
-    const raw = await fs.readFile(CACHE_FILE, "utf8");
-    cache = JSON.parse(raw) as CacheFile;
-  } catch {
-    // start fresh
-  }
+    const CACHE_FILE = getCacheFile();
+    let cache: CacheFile = {};
+    try {
+      const raw = await fs.readFile(CACHE_FILE, "utf8");
+      cache = JSON.parse(raw) as CacheFile;
+    } catch {
+      // start fresh
+    }
 
-  cache[cacheKey(zip, state, city)] = { stats, cachedAt: new Date().toISOString() };
-  await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true });
-  await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), "utf8");
+    cache[cacheKey(zip, state, city)] = { stats, cachedAt: new Date().toISOString() };
+    await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true });
+    await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), "utf8");
+  } catch {
+    // Cache is best-effort — never fail the request on Vercel read-only FS.
+  }
 }
