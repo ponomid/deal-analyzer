@@ -87,51 +87,6 @@ function saveLocalReports(reports: SavedReport[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
 }
 
-/** Load reports from server file; migrate any browser-only copies if server is empty. */
-export async function fetchSavedReports(): Promise<SavedReport[]> {
-  const localReports = loadLocalReports();
-
-  try {
-    const response = await fetch("/api/reports");
-    if (!response.ok) {
-      return localReports;
-    }
-
-    const serverReports = (await response.json()) as SavedReport[];
-    if (!Array.isArray(serverReports)) {
-      return localReports;
-    }
-
-    if (serverReports.length > 0) {
-      saveLocalReports(serverReports);
-      return serverReports;
-    }
-
-    if (localReports.length === 0) return [];
-
-    for (const report of localReports) {
-      await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(report),
-      });
-    }
-
-    const refreshed = await fetch("/api/reports");
-    if (refreshed.ok) {
-      const migrated = (await refreshed.json()) as SavedReport[];
-      if (Array.isArray(migrated) && migrated.length > 0) {
-        saveLocalReports(migrated);
-        return migrated;
-      }
-    }
-
-    return localReports;
-  } catch {
-    return localReports;
-  }
-}
-
 function upsertLocalReport(report: SavedReport): SavedReport[] {
   const reports = loadLocalReports();
   const index = reports.findIndex((r) => r.id === report.id);
@@ -148,40 +103,80 @@ function deleteLocalReport(id: string): SavedReport[] {
   return next;
 }
 
-export async function saveReportToServer(report: SavedReport): Promise<SavedReport[]> {
+/** Prefer newer updatedAt when merging local + server copies of the same id. */
+function mergeReports(local: SavedReport[], remote: SavedReport[]): SavedReport[] {
+  const byId = new Map<string, SavedReport>();
+
+  for (const report of [...remote, ...local]) {
+    const existing = byId.get(report.id);
+    if (!existing) {
+      byId.set(report.id, report);
+      continue;
+    }
+    const existingTime = Date.parse(existing.updatedAt) || 0;
+    const nextTime = Date.parse(report.updatedAt) || 0;
+    if (nextTime >= existingTime) byId.set(report.id, report);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const aTime = Date.parse(a.updatedAt) || 0;
+    const bTime = Date.parse(b.updatedAt) || 0;
+    return bTime - aTime;
+  });
+}
+
+/**
+ * Load saved reports. Browser localStorage is the source of truth on serverless
+ * hosts (Vercel /tmp is ephemeral and must not wipe the local list).
+ */
+export async function fetchSavedReports(): Promise<SavedReport[]> {
+  const localReports = loadLocalReports();
+
   try {
-    const response = await fetch("/api/reports", {
+    const response = await fetch("/api/reports");
+    if (!response.ok) return localReports;
+
+    const serverReports = (await response.json()) as SavedReport[];
+    if (!Array.isArray(serverReports) || serverReports.length === 0) {
+      return localReports;
+    }
+
+    const merged = mergeReports(localReports, serverReports);
+    saveLocalReports(merged);
+    return merged;
+  } catch {
+    return localReports;
+  }
+}
+
+/** Save a report locally first; best-effort sync to server without trusting its full list. */
+export async function saveReportToServer(report: SavedReport): Promise<SavedReport[]> {
+  const next = upsertLocalReport(report);
+
+  try {
+    await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(report),
     });
-
-    if (response.ok) {
-      const payload = (await response.json()) as { reports: SavedReport[] };
-      saveLocalReports(payload.reports);
-      return payload.reports;
-    }
   } catch {
-    // Server unavailable (e.g. Vercel) — fall back to browser storage.
+    // Local save already succeeded.
   }
 
-  return upsertLocalReport(report);
+  return next;
 }
 
+/** Delete locally first; best-effort sync to server. */
 export async function deleteReportFromServer(id: string): Promise<SavedReport[]> {
-  try {
-    const response = await fetch(`/api/reports/${id}`, { method: "DELETE" });
+  const next = deleteLocalReport(id);
 
-    if (response.ok) {
-      const payload = (await response.json()) as { reports: SavedReport[] };
-      saveLocalReports(payload.reports);
-      return payload.reports;
-    }
+  try {
+    await fetch(`/api/reports/${id}`, { method: "DELETE" });
   } catch {
-    // Server unavailable — fall back to browser storage.
+    // Local delete already succeeded.
   }
 
-  return deleteLocalReport(id);
+  return next;
 }
 
 export function defaultReportName(address: string, price: string): string {
