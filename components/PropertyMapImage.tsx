@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { googleStaticMapUrl, mapImageProxyUrl, osmEmbedMapUrl } from "@/lib/maps";
+import {
+  freeStaticMapUrl,
+  googleStaticMapUrl,
+  mapImageProxyUrl,
+  osmEmbedMapUrl,
+} from "@/lib/maps";
 
 type PropertyMapImageProps = {
   lat?: number | null;
@@ -12,7 +17,7 @@ type PropertyMapImageProps = {
   variant?: "full" | "thumb";
 };
 
-type MapSource = "loading" | "google-static" | "api-proxy" | "osm" | "unavailable";
+type MapSource = "loading" | "google-static" | "api-proxy" | "free-static" | "osm" | "unavailable";
 
 let cachedGoogleKey: string | null | undefined;
 
@@ -42,7 +47,11 @@ export function PropertyMapImage({
 }: PropertyMapImageProps) {
   const [googleKey, setGoogleKey] = useState<string | null>(cachedGoogleKey ?? null);
   const [source, setSource] = useState<MapSource>(
-    cachedGoogleKey === undefined ? "loading" : cachedGoogleKey ? "google-static" : variant === "thumb" ? "unavailable" : "osm"
+    cachedGoogleKey === undefined
+      ? "loading"
+      : cachedGoogleKey
+        ? "google-static"
+        : "free-static"
   );
 
   useEffect(() => {
@@ -51,14 +60,13 @@ export function PropertyMapImage({
     loadGoogleMapsKey().then((key) => {
       if (cancelled) return;
       setGoogleKey(key);
-      if (key) setSource("google-static");
-      else setSource(variant === "thumb" ? "unavailable" : "osm");
+      setSource(key ? "google-static" : "free-static");
     });
 
     return () => {
       cancelled = true;
     };
-  }, [variant]);
+  }, []);
 
   const classNames = [className].filter(Boolean).join(" ");
 
@@ -90,6 +98,19 @@ export function PropertyMapImage({
     );
   }
 
+  if (source === "free-static") {
+    const size = variant === "thumb" ? { width: 144, height: 108 } : { width: 640, height: 320 };
+    return (
+      <img
+        src={freeStaticMapUrl(lat, lon, size.width, size.height)}
+        alt={alt}
+        className={["property-map-image", classNames].filter(Boolean).join(" ")}
+        loading="lazy"
+        onError={() => setSource(variant === "thumb" ? "unavailable" : "osm")}
+      />
+    );
+  }
+
   if (source === "api-proxy") {
     return (
       <img
@@ -97,7 +118,7 @@ export function PropertyMapImage({
         alt={alt}
         className={["property-map-image", classNames].filter(Boolean).join(" ")}
         loading="lazy"
-        onError={() => setSource(variant === "thumb" ? "unavailable" : "osm")}
+        onError={() => setSource("free-static")}
       />
     );
   }

@@ -11,7 +11,25 @@ export function googleStaticMapUrl(lat: number, lon: number, apiKey: string): st
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
 }
 
-/** Free fallback when Google Maps is unavailable or misconfigured. */
+/**
+ * Free satellite preview (no API key). Used when Google Maps is not configured.
+ * Source: Esri World Imagery.
+ */
+export function freeStaticMapUrl(lat: number, lon: number, width = 640, height = 320): string {
+  const delta = 0.004;
+  const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
+  const params = new URLSearchParams({
+    bbox,
+    bboxSR: "4326",
+    imageSR: "4326",
+    size: `${width},${height}`,
+    format: "jpg",
+    f: "image",
+  });
+  return `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?${params.toString()}`;
+}
+
+/** Interactive fallback when static images fail (full-size maps only). */
 export function osmEmbedMapUrl(lat: number, lon: number): string {
   const delta = 0.006;
   const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
