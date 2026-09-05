@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { freeStaticMapUrl } from "@/lib/maps";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ async function streetViewAvailable(lat: string, lon: string, apiKey: string): Pr
   }
 }
 
-function buildMapUrl(lat: string, lon: string, apiKey: string, useStreetView: boolean): string {
+function buildGoogleMapUrl(lat: string, lon: string, apiKey: string, useStreetView: boolean): string {
   if (useStreetView) {
     const url = new URL("https://maps.googleapis.com/maps/api/streetview");
     url.searchParams.set("size", "640x320");
@@ -39,6 +40,17 @@ function buildMapUrl(lat: string, lon: string, apiKey: string, useStreetView: bo
   return url.toString();
 }
 
+async function fetchImage(mapUrl: string): Promise<Response | null> {
+  try {
+    const response = await fetch(mapUrl, { next: { revalidate: 86400 } });
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("image")) return null;
+    return response;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const lat = searchParams.get("lat");
@@ -49,32 +61,26 @@ export async function GET(request: Request) {
   }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "Map images are not configured" }, { status: 503 });
+  let mapResponse: Response | null = null;
+
+  if (apiKey) {
+    const hasStreetView = await streetViewAvailable(lat, lon, apiKey);
+    mapResponse = await fetchImage(buildGoogleMapUrl(lat, lon, apiKey, hasStreetView));
   }
 
-  const hasStreetView = await streetViewAvailable(lat, lon, apiKey);
-  const mapUrl = buildMapUrl(lat, lon, apiKey, hasStreetView);
+  if (!mapResponse) {
+    mapResponse = await fetchImage(freeStaticMapUrl(Number(lat), Number(lon)));
+  }
 
-  try {
-    const response = await fetch(mapUrl, { next: { revalidate: 86400 } });
-    if (!response.ok) {
-      return NextResponse.json({ error: "Failed to load map image" }, { status: 502 });
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("image")) {
-      return NextResponse.json({ error: "Map provider returned non-image response" }, { status: 502 });
-    }
-
-    const bytes = await response.arrayBuffer();
-    return new NextResponse(bytes, {
-      headers: {
-        "Content-Type": response.headers.get("content-type") || "image/jpeg",
-        "Cache-Control": "public, max-age=86400",
-      },
-    });
-  } catch {
+  if (!mapResponse) {
     return NextResponse.json({ error: "Failed to load map image" }, { status: 502 });
   }
+
+  const bytes = await mapResponse.arrayBuffer();
+  return new NextResponse(bytes, {
+    headers: {
+      "Content-Type": mapResponse.headers.get("content-type") || "image/jpeg",
+      "Cache-Control": "public, max-age=86400",
+    },
+  });
 }
