@@ -57,10 +57,18 @@ const HIGHLIGHT_METRICS: CompareMetric[] = [
     getRaw: (r) => r.analysis?.capRate ?? null,
     higherIsBetter: true,
   },
+  {
+    id: "appreciation",
+    label: "Appreciation (1yr)",
+    getValue: (r) =>
+      r.analysis?.appreciation ? `${r.analysis.appreciation.rateYoY.toFixed(1)}%` : "—",
+    getRaw: (r) => r.analysis?.appreciation?.rateYoY ?? null,
+    higherIsBetter: true,
+  },
 ];
 
 const DEAL_GROUPS: { title: string; metricIds: string[] }[] = [
-  { title: "Returns", metricIds: ["rent", "cashFlowAnnual", "onePercent"] },
+  { title: "Returns", metricIds: ["rent", "cashFlowAnnual", "onePercent", "appreciation"] },
   { title: "Investment & costs", metricIds: ["price", "cashInvested", "expenses"] },
 ];
 
@@ -84,6 +92,14 @@ const ALL_DEAL_METRICS: CompareMetric[] = [
     label: "1% rule",
     getValue: (r) => (r.analysis ? `${r.analysis.onePercentRatio.toFixed(2)}%` : "—"),
     getRaw: (r) => r.analysis?.onePercentRatio ?? null,
+    higherIsBetter: true,
+  },
+  {
+    id: "appreciation",
+    label: "Appreciation (1yr HPI)",
+    getValue: (r) =>
+      r.analysis?.appreciation ? `${r.analysis.appreciation.rateYoY.toFixed(1)}%` : "—",
+    getRaw: (r) => r.analysis?.appreciation?.rateYoY ?? null,
     higherIsBetter: true,
   },
   {

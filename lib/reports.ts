@@ -1,4 +1,5 @@
 import type { AddressSuggestion } from "@/lib/address";
+import type { AppreciationEstimate, AppreciationProjection } from "@/lib/appreciation";
 import type { OperatingEstimates, PropertyType, RentEstimate } from "@/lib/types";
 
 export type ReportAnalysis = {
@@ -20,6 +21,8 @@ export type ReportAnalysis = {
   onePercentRatio: number;
   verdict: "Approved" | "Marginal" | "Pass";
   verdictClass: "approved" | "marginal" | "pass";
+  appreciation?: AppreciationEstimate | null;
+  appreciationProjection?: AppreciationProjection | null;
 };
 
 export type ReportUnitForm = {

@@ -4,6 +4,10 @@ import { FormEvent, useCallback, useEffect, useState, type ReactNode } from "rea
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { PropertyMapImage } from "@/components/PropertyMapImage";
 import { SavedReportsPanel } from "@/components/SavedReportsPanel";
+import {
+  projectAppreciation,
+  type AppreciationEstimate,
+} from "@/lib/appreciation";
 import { buildFallbackOperatingEstimates } from "@/lib/operating-defaults";
 import type { AddressSuggestion } from "@/lib/address";
 import {
@@ -439,6 +443,26 @@ export function DealAnalyzer() {
       const cashOnCash = cashInvested > 0 ? (cashFlowAnnual / cashInvested) * 100 : 0;
       const onePercentRatio = purchasePrice > 0 ? (rent / purchasePrice) * 100 : 0;
 
+      let appreciation: AppreciationEstimate | null = null;
+      try {
+        const stateParam = verifiedAddress?.state || "";
+        if (stateParam) {
+          const appreciationResponse = await fetch(
+            `/api/appreciation?state=${encodeURIComponent(stateParam)}`
+          );
+          if (appreciationResponse.ok) {
+            appreciation = (await appreciationResponse.json()) as AppreciationEstimate;
+          }
+        }
+      } catch {
+        appreciation = null;
+      }
+
+      const appreciationProjection =
+        appreciation != null
+          ? projectAppreciation(purchasePrice, cashFlowAnnual, appreciation)
+          : null;
+
       let verdict: Analysis["verdict"];
       let verdictClass: Analysis["verdictClass"];
       if (cashFlowMonthly > 200 && cashOnCash > 8) {
@@ -471,6 +495,8 @@ export function DealAnalyzer() {
         onePercentRatio,
         verdict,
         verdictClass,
+        appreciation,
+        appreciationProjection,
       });
       setStatus("");
       requestAnimationFrame(() => {
@@ -897,6 +923,14 @@ export function DealAnalyzer() {
                         {analysis.capRate.toFixed(2)}%
                       </span>
                     </div>
+                    {analysis.appreciation ? (
+                      <div className="results-highlight">
+                        <span className="results-highlight-label">Appreciation (1yr)</span>
+                        <span className="results-highlight-value">
+                          {analysis.appreciation.rateYoY.toFixed(1)}%
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -976,6 +1010,53 @@ export function DealAnalyzer() {
                     <MetricLine k="Cash invested" v={fmt$(analysis.cashInvested)} />
                     <MetricLine k="1% rule" v={`${analysis.onePercentRatio.toFixed(2)}%`} />
                   </section>
+
+                  {analysis.appreciation && analysis.appreciationProjection ? (
+                    <section className="worksheet-card results-card">
+                      <header className="worksheet-card-head">
+                        <h2>Appreciation</h2>
+                        <p>
+                          {analysis.appreciation.geography}
+                          {analysis.appreciation.asOf !== "n/a"
+                            ? ` · FHFA through ${analysis.appreciation.asOf}`
+                            : ""}
+                        </p>
+                      </header>
+                      <MetricLine
+                        k="Trailing 1-year HPI change"
+                        v={`${analysis.appreciation.rateYoY.toFixed(2)}%`}
+                      />
+                      {analysis.appreciation.rate5yrAnnualized != null ? (
+                        <MetricLine
+                          k="5-year annualized HPI"
+                          v={`${analysis.appreciation.rate5yrAnnualized.toFixed(2)}%`}
+                        />
+                      ) : null}
+                      <MetricLine
+                        k="Projected value in 1 year"
+                        v={fmt$(analysis.appreciationProjection.projectedValue1yr)}
+                      />
+                      <MetricLine
+                        k="Projected appreciation gain (1yr)"
+                        v={fmtSigned$(analysis.appreciationProjection.gain1yr)}
+                        neg={analysis.appreciationProjection.gain1yr < 0}
+                      />
+                      <MetricLine
+                        k="Projected value in 5 years"
+                        v={fmt$(analysis.appreciationProjection.projectedValue5yr)}
+                      />
+                      <MetricLine
+                        k="Cash flow + appreciation (1yr)"
+                        v={fmtSigned$(analysis.appreciationProjection.totalReturn1yr)}
+                        neg={analysis.appreciationProjection.totalReturn1yr < 0}
+                      />
+                      {analysis.appreciation.notes ? (
+                        <div className="notes" style={{ marginTop: 12 }}>
+                          {analysis.appreciation.notes}
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
                 </div>
               </div>
             </>
