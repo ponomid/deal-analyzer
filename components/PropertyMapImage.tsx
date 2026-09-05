@@ -1,12 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  freeStaticMapUrl,
-  googleStaticMapUrl,
-  mapImageProxyUrl,
-  osmEmbedMapUrl,
-} from "@/lib/maps";
+import { useState } from "react";
+import { freeStaticMapUrl, mapImageProxyUrl, osmEmbedMapUrl } from "@/lib/maps";
 
 type PropertyMapImageProps = {
   lat?: number | null;
@@ -17,26 +12,7 @@ type PropertyMapImageProps = {
   variant?: "full" | "thumb";
 };
 
-type MapSource = "loading" | "google-static" | "api-proxy" | "free-static" | "osm" | "unavailable";
-
-let cachedGoogleKey: string | null | undefined;
-
-function loadGoogleMapsKey(): Promise<string | null> {
-  if (cachedGoogleKey !== undefined) {
-    return Promise.resolve(cachedGoogleKey);
-  }
-
-  return fetch("/api/maps-config")
-    .then((response) => (response.ok ? response.json() : null))
-    .then((data: { googleMapsKey?: string } | null) => {
-      cachedGoogleKey = data?.googleMapsKey?.trim() || null;
-      return cachedGoogleKey;
-    })
-    .catch(() => {
-      cachedGoogleKey = null;
-      return null;
-    });
-}
+type MapSource = "api-proxy" | "free-static" | "osm" | "unavailable";
 
 export function PropertyMapImage({
   lat,
@@ -45,43 +21,13 @@ export function PropertyMapImage({
   className,
   variant = "full",
 }: PropertyMapImageProps) {
-  const [googleKey, setGoogleKey] = useState<string | null>(cachedGoogleKey ?? null);
-  const [source, setSource] = useState<MapSource>(
-    cachedGoogleKey === undefined
-      ? "loading"
-      : cachedGoogleKey
-        ? "google-static"
-        : "free-static"
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    loadGoogleMapsKey().then((key) => {
-      if (cancelled) return;
-      setGoogleKey(key);
-      setSource(key ? "google-static" : "free-static");
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  const [source, setSource] = useState<MapSource>("api-proxy");
   const classNames = [className].filter(Boolean).join(" ");
 
   if (lat == null || lon == null || source === "unavailable") {
     return (
       <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
         {variant === "thumb" ? "Map" : "Map preview unavailable"}
-      </div>
-    );
-  }
-
-  if (source === "loading") {
-    return (
-      <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
-        {variant === "thumb" ? "…" : "Loading map…"}
       </div>
     );
   }
@@ -111,33 +57,13 @@ export function PropertyMapImage({
     );
   }
 
-  if (source === "api-proxy") {
-    return (
-      <img
-        src={mapImageProxyUrl(lat, lon)}
-        alt={alt}
-        className={["property-map-image", classNames].filter(Boolean).join(" ")}
-        loading="lazy"
-        onError={() => setSource("free-static")}
-      />
-    );
-  }
-
-  if (source === "google-static" && googleKey) {
-    return (
-      <img
-        src={googleStaticMapUrl(lat, lon, googleKey)}
-        alt={alt}
-        className={["property-map-image", classNames].filter(Boolean).join(" ")}
-        loading="lazy"
-        onError={() => setSource("api-proxy")}
-      />
-    );
-  }
-
   return (
-    <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
-      {variant === "thumb" ? "Map" : "Map preview unavailable"}
-    </div>
+    <img
+      src={mapImageProxyUrl(lat, lon)}
+      alt={alt}
+      className={["property-map-image", classNames].filter(Boolean).join(" ")}
+      loading="lazy"
+      onError={() => setSource("free-static")}
+    />
   );
 }

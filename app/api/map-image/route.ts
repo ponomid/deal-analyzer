@@ -60,7 +60,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "lat and lon are required" }, { status: 400 });
   }
 
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey =
+    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.GOOGLE_MAPS_KEY?.trim() ||
+    "";
   let mapResponse: Response | null = null;
 
   if (apiKey) {
