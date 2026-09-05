@@ -76,6 +76,7 @@ export function SavedReportsPanel({
                         lon={coords.lon}
                         alt={`Map for ${report.name}`}
                         className="saved-thumb"
+                        variant="thumb"
                       />
                     ) : (
                       <div className="property-map-placeholder saved-thumb">No map</div>

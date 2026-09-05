@@ -8,40 +8,64 @@ type PropertyMapImageProps = {
   lon?: number | null;
   alt?: string;
   className?: string;
+  /** Thumbnails must stay image-only — iframes look broken in small slots. */
+  variant?: "full" | "thumb";
 };
 
-type MapSource = "loading" | "google-static" | "api-proxy" | "osm";
+type MapSource = "loading" | "google-static" | "api-proxy" | "osm" | "unavailable";
 
-export function PropertyMapImage({ lat, lon, alt = "Property map preview", className }: PropertyMapImageProps) {
-  const [googleKey, setGoogleKey] = useState<string | null>(null);
-  const [source, setSource] = useState<MapSource>("loading");
+let cachedGoogleKey: string | null | undefined;
+
+function loadGoogleMapsKey(): Promise<string | null> {
+  if (cachedGoogleKey !== undefined) {
+    return Promise.resolve(cachedGoogleKey);
+  }
+
+  return fetch("/api/maps-config")
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data: { googleMapsKey?: string } | null) => {
+      cachedGoogleKey = data?.googleMapsKey?.trim() || null;
+      return cachedGoogleKey;
+    })
+    .catch(() => {
+      cachedGoogleKey = null;
+      return null;
+    });
+}
+
+export function PropertyMapImage({
+  lat,
+  lon,
+  alt = "Property map preview",
+  className,
+  variant = "full",
+}: PropertyMapImageProps) {
+  const [googleKey, setGoogleKey] = useState<string | null>(cachedGoogleKey ?? null);
+  const [source, setSource] = useState<MapSource>(
+    cachedGoogleKey === undefined ? "loading" : cachedGoogleKey ? "google-static" : variant === "thumb" ? "unavailable" : "osm"
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/maps-config")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { googleMapsKey?: string } | null) => {
-        if (cancelled) return;
-        const key = data?.googleMapsKey?.trim() || null;
-        setGoogleKey(key);
-        setSource(key ? "google-static" : "osm");
-      })
-      .catch(() => {
-        if (!cancelled) setSource("osm");
-      });
+    loadGoogleMapsKey().then((key) => {
+      if (cancelled) return;
+      setGoogleKey(key);
+      if (key) setSource("google-static");
+      else setSource(variant === "thumb" ? "unavailable" : "osm");
+    });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [variant]);
 
   const classNames = [className].filter(Boolean).join(" ");
 
-  if (lat == null || lon == null) {
+  if (lat == null || lon == null || source === "unavailable") {
     return (
       <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
-        Map preview unavailable
+        {variant === "thumb" ? "Map" : "Map preview unavailable"}
       </div>
     );
   }
@@ -49,12 +73,12 @@ export function PropertyMapImage({ lat, lon, alt = "Property map preview", class
   if (source === "loading") {
     return (
       <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
-        Loading map…
+        {variant === "thumb" ? "…" : "Loading map…"}
       </div>
     );
   }
 
-  if (source === "osm") {
+  if (source === "osm" && variant === "full") {
     return (
       <iframe
         title={alt}
@@ -73,7 +97,7 @@ export function PropertyMapImage({ lat, lon, alt = "Property map preview", class
         alt={alt}
         className={["property-map-image", classNames].filter(Boolean).join(" ")}
         loading="lazy"
-        onError={() => setSource("osm")}
+        onError={() => setSource(variant === "thumb" ? "unavailable" : "osm")}
       />
     );
   }
@@ -92,7 +116,7 @@ export function PropertyMapImage({ lat, lon, alt = "Property map preview", class
 
   return (
     <div className={["property-map-placeholder", classNames].filter(Boolean).join(" ")}>
-      Map preview unavailable
+      {variant === "thumb" ? "Map" : "Map preview unavailable"}
     </div>
   );
 }

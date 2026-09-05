@@ -716,6 +716,12 @@ input::placeholder {
   background: var(--surface-muted);
 }
 
+/* Never let embeds bleed into tiny list thumbnails */
+.property-map-embed.saved-thumb,
+.property-map-embed.compare-chip-thumb {
+  display: none;
+}
+
 .property-map-image.results-map {
   width: 100%;
 }

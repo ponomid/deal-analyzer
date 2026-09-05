@@ -223,6 +223,7 @@ function CompareDealCard({
             lon={coords.lon}
             alt={`Map for ${report.name}`}
             className="compare-deal-map"
+            variant="full"
           />
         ) : (
           <div className="property-map-placeholder compare-deal-map">No map</div>
@@ -450,6 +451,7 @@ export function ReportCompare() {
                             lon={coords.lon}
                             alt=""
                             className="compare-chip-thumb"
+                            variant="thumb"
                           />
                         ) : (
                           <div className="property-map-placeholder compare-chip-thumb" />
